@@ -1,0 +1,57 @@
+name: Auto Create Pull Request
+
+on:
+  push:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  create-pr:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Create Pull Request
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const branch = context.ref.replace('refs/heads/', '');
+            const baseBranch = 'dev';
+
+            if (
+              !branch.startsWith('feature/') &&
+              !branch.startsWith('bugfix/')
+            ) {
+              core.info(`Branch ${branch} skipped.`);
+              return;
+            }
+
+            const existing = await github.rest.pulls.list({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              head: `${context.repo.owner}:${branch}`,
+              base: baseBranch,
+              state: 'open'
+            });
+
+            if (existing.data.length > 0) {
+              core.info(`PR already exists: #${existing.data[0].number}`);
+              return;
+            }
+
+            const title = branch
+              .replace('feature/', '')
+              .replace('bugfix/', '')
+              .replace(/-/g, ' ');
+
+            await github.rest.pulls.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: title,
+              head: branch,
+              base: baseBranch,
+              body: 'Automatycznie utworzony Pull Request.'
+            });
+
+            core.info(`PR created for ${branch}`);
