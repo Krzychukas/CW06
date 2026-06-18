@@ -1,0 +1,62 @@
+name: Auto PR and Merge
+
+on:
+  push:
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  auto-pr-merge:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Create Pull Request and Merge
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const branch = context.ref.replace('refs/heads/', '');
+            const baseBranch = 'dev';
+
+            if (!branch.startsWith('merge/')) {
+              core.info(`Branch ${branch} skipped.`);
+              return;
+            }
+
+            const existing = await github.rest.pulls.list({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              head: `${context.repo.owner}:${branch}`,
+              base: baseBranch,
+              state: 'open'
+            });
+
+            let pull;
+
+            if (existing.data.length > 0) {
+              pull = existing.data[0];
+              core.info(`PR already exists: #${pull.number}`);
+            } else {
+              const created = await github.rest.pulls.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: `Auto merge: ${branch}`,
+                head: branch,
+                base: baseBranch,
+                body: 'Automatycznie utworzony Pull Request i merge.'
+              });
+
+              pull = created.data;
+              core.info(`Created PR #${pull.number}`);
+            }
+
+            await github.rest.pulls.merge({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: pull.number,
+              merge_method: 'merge'
+            });
+
+            core.info(`Merged PR #${pull.number} into ${baseBranch}`);
